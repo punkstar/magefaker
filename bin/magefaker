@@ -12,10 +12,19 @@ $opts->argument()
     ->require()
     ->describedAs("The number of customers you'd like to create");
 
+$c = new \Colors\Color();
+
 $magento_base_dir = $opts['magento'];
 $customer_count = $opts[0];
 
-require $magento_base_dir . DIRECTORY_SEPARATOR . "app/Mage.php";
+$app_file = $magento_base_dir . DIRECTORY_SEPARATOR . "app/Mage.php";
+
+if (!file_exists($app_file)) {
+    echo $c("The file $app_file does not exist. Exiting..\n")->red;
+    exit(1);
+}
+
+require $app_file;
 
 Mage::app();
 
@@ -74,7 +83,6 @@ class MageFaker {
     }
 }
 
-$c = new \Colors\Color();
 $magefaker = new MageFaker();
 
 for ($i = 0; $i < $customer_count; $i++) {
