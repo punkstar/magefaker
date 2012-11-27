@@ -1,0 +1,87 @@
+#!/usr/bin/php
+<?php
+require realpath(dirname(__FILE__) . "/../vendor/autoload.php");
+
+$opts = new \Commando\Command();
+
+$opts->option('magento')
+    ->require()
+    ->describedAs('The root directory of your Magento installation');
+
+$opts->argument()
+    ->require()
+    ->describedAs("The number of customers you'd like to create");
+
+$magento_base_dir = $opts['magento'];
+$customer_count = $opts[0];
+
+require $magento_base_dir . DIRECTORY_SEPARATOR . "app/Mage.php";
+
+Mage::app();
+
+class MageFaker {
+    protected $_faker;
+
+    public function __construct() {
+        $this->_faker = \Faker\Factory::create();
+    }
+
+    public function createFakeCustomer() {
+        /** @var $customer Mage_Customer_Model_Customer */
+        $customer = Mage::getModel('customer/customer')->setData(array(
+            'prefix'    => $this->_faker->prefix,
+            'firstname' => $this->_faker->firstName,
+            'lastname'  => $this->_faker->lastName,
+            'email'     => $this->_faker->safeEmail,
+            'dob'       => $this->_faker->dateTimeThisCentury->format('Y-m-d'),
+            'gender'    => rand(1, 2),
+            'password'  => 'password1'
+        ));
+
+        $customer->save();
+
+        $billing_address = $this->createFakeAddress('billing');
+        $shipping_address = $this->createFakeAddress('shipping');
+
+        $billing_address->setCustomer($customer)->save();
+        $shipping_address->setCustomer($customer)->save();
+
+        return $customer;
+    }
+
+    public function createFakeAddress($type) {
+        /** @var $address Mage_Customer_Model_Address */
+        $address = Mage::getModel('customer/address')->setData(array(
+            'prefix'     => $this->_faker->prefix,
+            'firstname'  => $this->_faker->firstName,
+            'lastname'   => $this->_faker->lastName,
+            'company'    => $this->_faker->company,
+            'street'     => array(
+                $this->_faker->buildingNumber . ' ' . $this->_faker->streetName,
+                $this->_faker->secondaryAddress
+            ),
+            'city'       => $this->_faker->city,
+            'country_id' => 'GB', // ..obviously..
+            'region'     => $this->_faker->city, // ..will probably sound like a region
+            'postcode'   => $this->_faker->postcode,
+            'telephone'  => $this->_faker->phoneNumber,
+            'fax'        => $this->_faker->phoneNumber,
+
+            "is_default_$type" => 1
+        ));
+
+        return $address;
+    }
+}
+
+$c = new \Colors\Color();
+$magefaker = new MageFaker();
+
+for ($i = 0; $i < $customer_count; $i++) {
+    try {
+        $customer = $magefaker->createFakeCustomer();
+        echo $c(sprintf("Introducing.. %s\n", $customer->getName()))->green;
+    } catch (Exception $e) {
+        echo $c(sprintf("An error occurred: %s\n", $e->getMessage()))->red;
+    }
+}

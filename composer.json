@@ -1,0 +1,7 @@
+{
+    "require": {
+        "fzaninotto/faker": "1.1.*",
+        "nategood/commando": "*",
+        "kevinlebrun/colors.php": "0.2.*"
+    }
+}

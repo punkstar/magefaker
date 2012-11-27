@@ -1,0 +1,150 @@
+{
+    "hash": "d1b17d9dc78cb5d600fea8011f8b1651",
+    "packages": [
+        {
+            "name": "fzaninotto/faker",
+            "version": "v1.1.0",
+            "source": {
+                "type": "git",
+                "url": "https://github.com/fzaninotto/Faker",
+                "reference": "v1.1.0"
+            },
+            "dist": {
+                "type": "zip",
+                "url": "https://github.com/fzaninotto/Faker/archive/v1.1.0.zip",
+                "reference": "v1.1.0",
+                "shasum": ""
+            },
+            "require": {
+                "php": ">=5.3.3"
+            },
+            "time": "2012-10-29 02:32:06",
+            "type": "library",
+            "extra": {
+                "branch-alias": {
+                    "dev-master": "1.1.x-dev"
+                }
+            },
+            "installation-source": "dist",
+            "autoload": {
+                "psr-0": {
+                    "Faker": "src/"
+                }
+            },
+            "license": [
+                "MIT"
+            ],
+            "authors": [
+                {
+                    "name": "François Zaninotto"
+                }
+            ],
+            "description": "Faker is a PHP library that generates fake data for you.",
+            "keywords": [
+                "faker",
+                "fixtures",
+                "data"
+            ]
+        },
+        {
+            "name": "kevinlebrun/colors.php",
+            "version": "0.2.0",
+            "source": {
+                "type": "git",
+                "url": "https://github.com/kevinlebrun/colors.php",
+                "reference": "0.2.0"
+            },
+            "dist": {
+                "type": "zip",
+                "url": "https://github.com/kevinlebrun/colors.php/zipball/0.2.0",
+                "reference": "0.2.0",
+                "shasum": ""
+            },
+            "require": {
+                "php": ">=5.3.0"
+            },
+            "time": "2012-03-25 11:18:10",
+            "type": "library",
+            "installation-source": "dist",
+            "autoload": {
+                "psr-0": {
+                    "Colors": "lib/"
+                }
+            },
+            "license": [
+                "MIT"
+            ],
+            "authors": [
+                {
+                    "name": "Kevin Le Brun",
+                    "email": "lebrun.k@gmail.com",
+                    "homepage": "https://github.com/kevinlebrun"
+                }
+            ],
+            "description": "Colors for PHP CLI scripts",
+            "homepage": "https://github.com/kevinlebrun/colors.php",
+            "keywords": [
+                "cli",
+                "console",
+                "shell",
+                "colors",
+                "color"
+            ]
+        },
+        {
+            "name": "nategood/commando",
+            "version": "0.2.1",
+            "source": {
+                "type": "git",
+                "url": "https://github.com/nategood/commando",
+                "reference": "v0.2.1"
+            },
+            "dist": {
+                "type": "zip",
+                "url": "https://github.com/nategood/commando/zipball/v0.2.1",
+                "reference": "v0.2.1",
+                "shasum": ""
+            },
+            "require": {
+                "php": ">=5.3",
+                "kevinlebrun/colors.php": "0.2.*"
+            },
+            "time": "2012-10-07 08:35:37",
+            "type": "library",
+            "installation-source": "dist",
+            "autoload": {
+                "psr-0": {
+                    "Commando": "src/"
+                }
+            },
+            "license": [
+                "MIT"
+            ],
+            "authors": [
+                {
+                    "name": "Nate Good",
+                    "email": "me@nategood.com",
+                    "homepage": "http://nategood.com"
+                }
+            ],
+            "description": "PHP CLI Commando Style",
+            "homepage": "http://github.com/nategood/commando",
+            "keywords": [
+                "cli",
+                "command",
+                "command line",
+                "automation",
+                "command line interface",
+                "scripting"
+            ]
+        }
+    ],
+    "packages-dev": null,
+    "aliases": [
+
+    ],
+    "minimum-stability": "stable",
+    "stability-flags": [
+
+    ]
+}
