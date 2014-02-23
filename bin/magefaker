@@ -127,7 +127,7 @@ class MageFaker {
     public function createFakeOrder($_customer=null, $_purchase_item_count=0) {
         $quote = Mage::getModel('sales/quote')->setStoreId(Mage::app()->getStore('default')->getId());
         if (empty($this->productIds)) {
-            // Grab productIds from available items
+            // Grab productIds from available items - of product type 'simple'
             $visibility = array(Mage_Catalog_Model_Product_Visibility::VISIBILITY_BOTH,
                                 Mage_Catalog_Model_Product_Visibility::VISIBILITY_IN_CATALOG
                             );
@@ -138,6 +138,7 @@ class MageFaker {
                             'status',
                             array('eq' => Mage_Catalog_Model_Product_Status::STATUS_ENABLED)
                         )
+                        ->addAttributeToFilter('type_id', array('eq' => 'simple')) // REMOVE for all product types: configurable, grouped, bundle, virtual etc.
                         ->joinField(
                             'is_in_stock',
                             'cataloginventory/stock_item',
