@@ -128,7 +128,10 @@ class MageFaker {
         $quote = Mage::getModel('sales/quote')->setStoreId(Mage::app()->getStore('default')->getId());
         if (empty($this->productIds)) {
             // Grab productIds from available items
-            $collection = Mage::getModel('catalog/product')->getCollection()
+            $visibility = array(Mage_Catalog_Model_Product_Visibility::VISIBILITY_BOTH,
+                                Mage_Catalog_Model_Product_Visibility::VISIBILITY_IN_CATALOG
+                            );
+            $products = Mage::getModel('catalog/product')->getResourceCollection()
                         ->addAttributeToSelect('*')
                         ->addAttributeToFilter('visibility', $visibility)
                         ->addAttributeToFilter(
@@ -154,7 +157,6 @@ class MageFaker {
                         ->addAttributeToFilter('is_in_stock', array('eq' => 1))
                         ->setOrder('created_at', 'desc')
                         ->setPageSize(100); // limit to only 100 results
-            $products = $colleciton->load();
 
             foreach ($products as $prod) {
                 array_push($this->productsIds, $prod->getId());
