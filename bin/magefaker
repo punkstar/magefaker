@@ -1,6 +1,7 @@
 #!/usr/bin/php
 <?php
 error_reporting(E_ALL | E_STRICT);
+ini_set("memory_limit","500M");
 require realpath(dirname(__FILE__) . "/../vendor/autoload.php");
 
 $opts = new \Commando\Command();
@@ -125,81 +126,114 @@ class MageFaker {
 
     public function createFakeOrder($_customer=null, $_purchase_item_count=0) {
         $quote = Mage::getModel('sales/quote')->setStoreId(Mage::app()->getStore('default')->getId());
-        if (!empty($this->productIds)) {
-            for ($k = 0; $k < $_purchase_item_count; $k++) {
-                $index = array_rand($this->productIds, 1);  // Randomly pick a productId
-                $product = Mage::getModel('catalog/product')->load($this->productIds[$index]); // Make sure it's a 'simple' item
-                $qtyInfo = array('qty' => 1);
-                $quote->addProduct($product, new Varien_Object($qtyInfo));
+        if (empty($this->productIds)) {
+            // Grab productIds from available items
+            $collection = Mage::getModel('catalog/product')->getCollection()
+                        ->addAttributeToSelect('*')
+                        ->addAttributeToFilter('visibility', $visibility)
+                        ->addAttributeToFilter(
+                            'status',
+                            array('eq' => Mage_Catalog_Model_Product_Status::STATUS_ENABLED)
+                        )
+                        ->joinField(
+                            'is_in_stock',
+                            'cataloginventory/stock_item',
+                            'is_in_stock',
+                            'product_id=entity_id',
+                            '{{table}}.stock_id=1',
+                            'left'
+                        )
+                        ->joinField(
+                            'qty',
+                            'cataloginventory/stock_item',
+                            'qty',
+                            'product_id=entity_id',
+                            '{{table}}.stock_id=1',
+                            'left'
+                        )
+                        ->addAttributeToFilter('is_in_stock', array('eq' => 1))
+                        ->setOrder('created_at', 'desc')
+                        ->setPageSize(100); // limit to only 100 results
+            $products = $colleciton->load();
+
+            foreach ($products as $prod) {
+                array_push($this->productsIds, $prod->getId());
             }
-
-            if (!isset($_customer)) { // Checks out as guest
-                $billingAddress = array(
-                    'firstname' => $this->_faker->firstName,
-                    'lastname' => $this->_faker->lastName,
-                    'company' => $this->_faker->company,
-                    'email' =>  $this->_faker->safeEmail,
-                    'street'     => array(
-                        $this->_faker->buildingNumber . ' ' . $this->_faker->streetName,
-                        $this->_faker->secondaryAddress
-                    ), 
-                    'city' => $this->_faker->city,
-                    'region_id' => '',
-                    'region' => $this->_faker->city,
-                    'postcode' => $this->_faker->postcode,
-                    'country_id' => 'GB',
-                    'telephone' =>  $this->_faker->phoneNumber,
-                    'fax' => $this->_faker->phoneNumber,
-                    'customer_password' => '',
-                    'confirm_password' =>  '',
-                    'save_in_address_book' => '0',
-                    'use_for_shipping' => '1',
-                );
-                $quote->getBillingAddress()->addData($billingAddress);
-                $quote->getShippingAddress()->addData($billingAddress);
-
-                $quote->setCheckoutMethod('guest')
-                ->setCustomerId(null)
-                ->setCustomerEmail($quote->getBillingAddress()->getEmail())
-                ->setCustomerIsGuest(true)
-                ->setCustomerGroup(Mage_Customer_Model_Group::NOT_LOGGED_IN_ID);
-            } else { // Check out as registered customer
-                $quote->assignCustomer($_customer);
-
-                $customer = Mage::getModel('customer/customer')->load($_customer->getId());
-                $billingAddress = $customer->getDefaultBillingAddress();
-                $shippingAddress = $customer->getDefaultShippingAddress();
-
-                $addressForm = Mage::getModel('customer/form');
-                $addressForm->setFormCode('customer_address_edit')
-                            ->setEntityType('customer_address');
-
-                foreach ($addressForm->getAttributes() as $attribute) {
-                    if (isset($shippingAddress[$attribute->getAttributeCode()])) {
-                        $quote->getShippingAddress()->setData($attribute->getAttributeCode(), $shippingAddress[$attribute->getAttributeCode()]);
-                    }
-                }
-
-                foreach ($addressForm->getAttributes() as $attribute) {
-                    if (isset($billingAddress[$attribute->getAttributeCode()])) {
-                        $quote->getBillingAddress()->setData($attribute->getAttributeCode(), $billingAddress[$attribute->getAttributeCode()]);
-                    }
-                }
-            }
-
-            $quote->getShippingAddress()->setCollectShippingRates(true);
-            $quote->getShippingAddress()->setShippingMethod('flatrate_flatrate'); //->setShippingMethod('tablerate_bestway')
-            $quote->getShippingAddress()->setPaymentMethod('checkmo');
-            $quote->getPayment()->importData(array('method' => 'checkmo'));
-            $quote->collectTotals(); 
-
-            $quote->save();
-
-            $service = Mage::getModel('sales/service_quote', $quote);
-            $service->submitAll();
-
-            return $service->getOrder();
         }
+
+        for ($k = 0; $k < $_purchase_item_count; $k++) {
+            $index = array_rand($this->productIds, 1);  // Randomly pick a productId
+            $product = Mage::getModel('catalog/product')->load($this->productIds[$index]); // Make sure it's a 'simple' item
+            $qtyInfo = array('qty' => 1);
+            $quote->addProduct($product, new Varien_Object($qtyInfo));
+        }
+
+        if (!isset($_customer)) { // Checks out as guest
+            $billingAddress = array(
+                'firstname' => $this->_faker->firstName,
+                'lastname' => $this->_faker->lastName,
+                'company' => $this->_faker->company,
+                'email' =>  $this->_faker->safeEmail,
+                'street'     => array(
+                    $this->_faker->buildingNumber . ' ' . $this->_faker->streetName,
+                    $this->_faker->secondaryAddress
+                ), 
+                'city' => $this->_faker->city,
+                'region_id' => '',
+                'region' => $this->_faker->city,
+                'postcode' => $this->_faker->postcode,
+                'country_id' => 'GB',
+                'telephone' =>  $this->_faker->phoneNumber,
+                'fax' => $this->_faker->phoneNumber,
+                'customer_password' => '',
+                'confirm_password' =>  '',
+                'save_in_address_book' => '0',
+                'use_for_shipping' => '1',
+            );
+            $quote->getBillingAddress()->addData($billingAddress);
+            $quote->getShippingAddress()->addData($billingAddress);
+
+            $quote->setCheckoutMethod('guest')
+            ->setCustomerId(null)
+            ->setCustomerEmail($quote->getBillingAddress()->getEmail())
+            ->setCustomerIsGuest(true)
+            ->setCustomerGroup(Mage_Customer_Model_Group::NOT_LOGGED_IN_ID);
+        } else { // Check out as registered customer
+            $quote->assignCustomer($_customer);
+
+            $customer = Mage::getModel('customer/customer')->load($_customer->getId());
+            $billingAddress = $customer->getDefaultBillingAddress();
+            $shippingAddress = $customer->getDefaultShippingAddress();
+
+            $addressForm = Mage::getModel('customer/form');
+            $addressForm->setFormCode('customer_address_edit')
+                        ->setEntityType('customer_address');
+
+            foreach ($addressForm->getAttributes() as $attribute) {
+                if (isset($shippingAddress[$attribute->getAttributeCode()])) {
+                    $quote->getShippingAddress()->setData($attribute->getAttributeCode(), $shippingAddress[$attribute->getAttributeCode()]);
+                }
+            }
+
+            foreach ($addressForm->getAttributes() as $attribute) {
+                if (isset($billingAddress[$attribute->getAttributeCode()])) {
+                    $quote->getBillingAddress()->setData($attribute->getAttributeCode(), $billingAddress[$attribute->getAttributeCode()]);
+                }
+            }
+        }
+
+        $quote->getShippingAddress()->setCollectShippingRates(true);
+        $quote->getShippingAddress()->setShippingMethod('flatrate_flatrate'); //->setShippingMethod('tablerate_bestway')
+        $quote->getShippingAddress()->setPaymentMethod('checkmo');
+        $quote->getPayment()->importData(array('method' => 'checkmo'));
+        $quote->collectTotals(); 
+
+        $quote->save();
+
+        $service = Mage::getModel('sales/service_quote', $quote);
+        $service->submitAll();
+
+        return $service->getOrder();
 
         return null;
     }
