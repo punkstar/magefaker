@@ -44,25 +44,10 @@ Mage::app();
 class MageFaker {
     protected $_faker;
     protected $_productIds;
-    protected $_defaultAttributeSetId;
 
     public function __construct() {
         $this->_faker = \Faker\Factory::create();
         $this->_productIds = array();
-        $this->_defaultAttributeSetId = $this->getDefaultAttributeSetId();
-    }
-
-    private function getDefaultAttributeSetId() {
-        /** Assumes you have some 'simple' products in the system e.g.: http://www.magentocommerce.com/download */
-        if (!isset($this->_defaultAttributeSetId))
-        {
-            $productModel = Mage::getModel("catalog/product")
-                            ->getResourceCollection()            
-                            ->addAttributeToFilter('type_id', array('eq' => 'simple')) // Change accordingly for other product types: configurable, grouped etc.
-                            ->getFirstItem();
-            $this->_defaultAttributeSetId = $productModel->getDefaultAttributeSetId();
-        }
-        return $this->_defaultAttributeSetId;
     }
 
     public function createFakeCustomer() {
@@ -122,7 +107,6 @@ class MageFaker {
         $product->setShortDescription($this->_faker->sentence);
         $product->setPrice($this->_faker->randomNumber + rand(0, 99)/10);
         $product->setTypeId('simple');
-        // $product->setAttributeSetId(intval($this->_defaultAttributeSetId));
         $product->setAttributeSetId(9);
         $product->setCategoryIds(array(Mage::app()->getStore(true)->getRootCategoryId()));
         $product->setWeight(1.0);
