@@ -8,14 +8,27 @@ $opts->option('magento')
     ->require()
     ->describedAs('The root directory of your Magento installation');
 
-$opts->argument()
-    ->require()
+$opts->option('products')
+    ->describedAs("The number of products you'd like to create");
+
+$opts->option('customers')
     ->describedAs("The number of customers you'd like to create");
+
+$opts->option('guestorders')
+    ->describedAs("The number of guest orders you'd like to create");
 
 $c = new \Colors\Color();
 
 $magento_base_dir = $opts['magento'];
-$customer_count = $opts[0];
+$product_count = intval($opts['products']);
+$guest_order_count = intval($opts['guestorders']);
+$customer_count = intval($opts['customers']);
+$order_count = 0;
+$purchase_item_count = 0;
+if (count($opts->getArgumentValues()) == 2) {
+    $order_count = intval($opts->getArgumentValues()[0]);
+    $purchase_item_count = intval($opts->getArgumentValues()[1]);
+}
 
 $app_file = $magento_base_dir . DIRECTORY_SEPARATOR . "app/Mage.php";
 
@@ -30,9 +43,11 @@ Mage::app();
 
 class MageFaker {
     protected $_faker;
+    protected $_productIds;
 
     public function __construct() {
         $this->_faker = \Faker\Factory::create();
+        $this->_productIds = array();
     }
 
     public function createFakeCustomer() {
@@ -81,14 +96,187 @@ class MageFaker {
 
         return $address;
     }
+
+    public function createFakeProduct() {
+        /** Note: Only 'simple' product-types are supported */
+        Mage::app()->setCurrentStore(Mage_Core_Model_App::ADMIN_STORE_ID);  
+        $product = Mage::getModel('catalog/product');
+        $product->setSku($this->_faker->md5);
+        $product->setName($this->_faker->sentence);
+        $product->setDescription($this->_faker->text);
+        $product->setShortDescription($this->_faker->sentence);
+        $product->setPrice($this->_faker->randomNumber + rand(0, 99)/10);
+        $product->setTypeId('simple');
+        $product->setAttributeSetId(9);
+        $product->setCategoryIds(array(Mage::app()->getStore(true)->getRootCategoryId()));
+        $product->setWeight(1.0);
+        $product->setTaxClassId(2); // taxable goods
+        $product->setVisibility(Mage_Catalog_Model_Product_Visibility::VISIBILITY_BOTH);
+        $product->setStatus(1); // enabled
+        $product->setStockData(array(
+            'is_in_stock' => 1,
+            'qty' => $this->_faker->randomDigit
+        ));
+        $product->setWebsiteIds(array(Mage::app()->getStore(true)->getWebsite()->getId()));
+        $product->setCreatedAt(strtotime('now'));
+        $product->save(); 
+
+        array_push($this->_productIds, $product->getId());
+
+        return $product;
+    }
+
+    public function createFakeOrder($_customer=null, $_purchase_item_count=0) {
+        $quote = Mage::getModel('sales/quote')->setStoreId(Mage::app()->getStore('default')->getId());
+        if (empty($this->_productIds)) {
+            // Grab productIds from available items - of product type 'simple'
+            $visibility = array(Mage_Catalog_Model_Product_Visibility::VISIBILITY_BOTH,
+                                Mage_Catalog_Model_Product_Visibility::VISIBILITY_IN_CATALOG
+                            );
+            $products = Mage::getModel('catalog/product')->getResourceCollection()
+                        ->addAttributeToSelect('*')
+                        ->addAttributeToFilter('visibility', $visibility)
+                        ->addAttributeToFilter(
+                            'status',
+                            array('eq' => Mage_Catalog_Model_Product_Status::STATUS_ENABLED)
+                        )
+                        ->addAttributeToFilter('type_id', array('eq' => 'simple')) // REMOVE for all product types: configurable, grouped, bundle, virtual etc.
+                        ->joinField(
+                            'is_in_stock',
+                            'cataloginventory/stock_item',
+                            'is_in_stock',
+                            'product_id=entity_id',
+                            '{{table}}.stock_id=1',
+                            'left'
+                        )
+                        ->joinField(
+                            'qty',
+                            'cataloginventory/stock_item',
+                            'qty',
+                            'product_id=entity_id',
+                            '{{table}}.stock_id=1',
+                            'left'
+                        )
+                        ->addAttributeToFilter('is_in_stock', array('eq' => 1))
+                        ->setOrder('created_at', 'desc')
+                        ->setPageSize(100); // limit to only 100 results
+
+            foreach ($products as $prod) {
+                array_push($this->productsIds, $prod->getId());
+            }
+        }
+
+        for ($k = 0; $k < $_purchase_item_count; $k++) {
+            $index = array_rand($this->_productIds, 1);  // Randomly pick a productId
+            $product = Mage::getModel('catalog/product')->load($this->_productIds[$index]); // Make sure it's a 'simple' item
+            $qtyInfo = array('qty' => 1);
+            $quote->addProduct($product, new Varien_Object($qtyInfo));
+        }
+
+        if (!isset($_customer)) { // Checks out as guest
+            $billingAddress = array(
+                'firstname' => $this->_faker->firstName,
+                'lastname' => $this->_faker->lastName,
+                'company' => $this->_faker->company,
+                'email' =>  $this->_faker->safeEmail,
+                'street'     => array(
+                    $this->_faker->buildingNumber . ' ' . $this->_faker->streetName,
+                    $this->_faker->secondaryAddress
+                ), 
+                'city' => $this->_faker->city,
+                'region_id' => '',
+                'region' => $this->_faker->city,
+                'postcode' => $this->_faker->postcode,
+                'country_id' => 'GB',
+                'telephone' =>  $this->_faker->phoneNumber,
+                'fax' => $this->_faker->phoneNumber,
+                'customer_password' => '',
+                'confirm_password' =>  '',
+                'save_in_address_book' => '0',
+                'use_for_shipping' => '1',
+            );
+            $quote->getBillingAddress()->addData($billingAddress);
+            $quote->getShippingAddress()->addData($billingAddress);
+
+            $quote->setCheckoutMethod('guest')
+            ->setCustomerId(null)
+            ->setCustomerEmail($quote->getBillingAddress()->getEmail())
+            ->setCustomerIsGuest(true)
+            ->setCustomerGroup(Mage_Customer_Model_Group::NOT_LOGGED_IN_ID);
+        } else { // Check out as registered customer
+            $quote->assignCustomer($_customer);
+
+            $customer = Mage::getModel('customer/customer')->load($_customer->getId());
+            $billingAddress = $customer->getDefaultBillingAddress();
+            $shippingAddress = $customer->getDefaultShippingAddress();
+
+            $addressForm = Mage::getModel('customer/form');
+            $addressForm->setFormCode('customer_address_edit')
+                        ->setEntityType('customer_address');
+
+            foreach ($addressForm->getAttributes() as $attribute) {
+                if (isset($shippingAddress[$attribute->getAttributeCode()])) {
+                    $quote->getShippingAddress()->setData($attribute->getAttributeCode(), $shippingAddress[$attribute->getAttributeCode()]);
+                }
+            }
+
+            foreach ($addressForm->getAttributes() as $attribute) {
+                if (isset($billingAddress[$attribute->getAttributeCode()])) {
+                    $quote->getBillingAddress()->setData($attribute->getAttributeCode(), $billingAddress[$attribute->getAttributeCode()]);
+                }
+            }
+        }
+
+        $quote->getShippingAddress()->setCollectShippingRates(true);
+        $quote->getShippingAddress()->setShippingMethod('flatrate_flatrate');
+        $quote->getShippingAddress()->setPaymentMethod('checkmo');
+        $quote->getPayment()->importData(array('method' => 'checkmo'));
+        $quote->collectTotals(); 
+
+        $quote->save();
+
+        $service = Mage::getModel('sales/service_quote', $quote);
+        $service->submitAll();
+
+        return $service->getOrder();
+    }
 }
 
 $magefaker = new MageFaker();
 
+// Create fake products
+for ($i = 0; $i < $product_count; $i++) {
+    try {
+        $product = $magefaker->createFakeProduct();
+        if (!isset($product)) throw new Exception("Error Creating Product", 1);
+        echo $c(sprintf("Introducing product.. %s\n", $product->getName()))->green;
+    } catch (Exception $e) {
+        echo $c(sprintf("An error occurred: %s\n", $e->getMessage()))->red;
+    }
+}
+
+// Create fake customers -- assumption each fake customer has x-orders
 for ($i = 0; $i < $customer_count; $i++) {
     try {
         $customer = $magefaker->createFakeCustomer();
-        echo $c(sprintf("Introducing.. %s\n", $customer->getName()))->green;
+        if (!isset($customer)) throw new Exception("Error Creating Customer", 1);
+        echo $c(sprintf("Introducing customer.. %s\n", $customer->getName()))->green;
+        for ($j = 0; $j < $order_count; $j++) { 
+            $order = $magefaker->createFakeOrder($customer, $purchase_item_count);
+            if (!isset($order)) throw new Exception("Error Creating Order", 1);
+            echo $c(sprintf("Order .. %s for customer %s\n", $order->getRealOrderId(), $customer->getName()))->green;
+        }
+    } catch (Exception $e) {
+        echo $c(sprintf("An error occurred: %s\n", $e->getMessage()))->red;
+    }
+}
+
+// Create fake guest orders
+for ($i = 0; $i < $guest_order_count; $i++) {
+    try {
+        $guest_order = $magefaker->createFakeOrder(null, $purchase_item_count);
+        if (!isset($guest_order)) throw new Exception("Error Creating Guest Order", 1);
+        echo $c(sprintf("Introducing guest order.. %s\n", $guest_order->getRealOrderId()))->green;
     } catch (Exception $e) {
         echo $c(sprintf("An error occurred: %s\n", $e->getMessage()))->red;
     }
