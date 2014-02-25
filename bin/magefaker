@@ -1,6 +1,5 @@
 #!/usr/bin/php
 <?php
-// ini_set("memory_limit","-1"); // Onus is on the user to set this. Uncomment out for large datasets
 require realpath(dirname(__FILE__) . "/../vendor/autoload.php");
 
 $opts = new \Commando\Command();
