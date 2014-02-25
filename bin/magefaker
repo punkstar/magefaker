@@ -1,7 +1,6 @@
 #!/usr/bin/php
 <?php
-error_reporting(E_ALL | E_STRICT);
-ini_set("memory_limit","500M");
+// ini_set("memory_limit","-1"); // Onus is on the user to set this. Uncomment out for large datasets
 require realpath(dirname(__FILE__) . "/../vendor/autoload.php");
 
 $opts = new \Commando\Command();
@@ -45,11 +44,26 @@ Mage::app();
 
 class MageFaker {
     protected $_faker;
-    protected $productIds;
+    protected $_productIds;
+    protected $_defaultAttributeSetId;
 
     public function __construct() {
         $this->_faker = \Faker\Factory::create();
-        $this->productIds = array();
+        $this->_productIds = array();
+        $this->_defaultAttributeSetId = $this->getDefaultAttributeSetId();
+    }
+
+    private function getDefaultAttributeSetId() {
+        /** Assumes you have some 'simple' products in the system e.g.: http://www.magentocommerce.com/download */
+        if (!isset($this->_defaultAttributeSetId))
+        {
+            $productModel = Mage::getModel("catalog/product")
+                            ->getResourceCollection()            
+                            ->addAttributeToFilter('type_id', array('eq' => 'simple')) // Change accordingly for other product types: configurable, grouped etc.
+                            ->getFirstItem();
+            $this->_defaultAttributeSetId = $productModel->getDefaultAttributeSetId();
+        }
+        return $this->_defaultAttributeSetId;
     }
 
     public function createFakeCustomer() {
@@ -100,33 +114,38 @@ class MageFaker {
     }
 
     public function createFakeProduct() {
+        /** Note: Only 'simple' product-types are supported */
         Mage::app()->setCurrentStore(Mage_Core_Model_App::ADMIN_STORE_ID);  
         $product = Mage::getModel('catalog/product');
-        $product->setSku(uniqid('', true));
-        $product->setName(uniqid('', true) . 'name');
-        $product->setDescription("This widget will give you years of trouble-free widgeting.");
-        $product->setShortDescription("High-end widget.");
-        $product->setPrice(rand(1, 10000) + rand(0, 99)/10);
+        $product->setSku($this->_faker->md5);
+        $product->setName($this->_faker->sentence);
+        $product->setDescription($this->_faker->text);
+        $product->setShortDescription($this->_faker->sentence);
+        $product->setPrice($this->_faker->randomNumber + rand(0, 99)/10);
         $product->setTypeId('simple');
-        $product->setAttributeSetId(9); // need to look this up
-        $product->setCategoryIds(array(42)); // need to look these up
+        // $product->setAttributeSetId(intval($this->_defaultAttributeSetId));
+        $product->setAttributeSetId(9);
+        $product->setCategoryIds(array(Mage::app()->getStore(true)->getRootCategoryId()));
         $product->setWeight(1.0);
         $product->setTaxClassId(2); // taxable goods
         $product->setVisibility(Mage_Catalog_Model_Product_Visibility::VISIBILITY_BOTH);
         $product->setStatus(1); // enabled
-        // assign product to the default website
+        $product->setStockData(array(
+            'is_in_stock' => 1,
+            'qty' => $this->_faker->randomDigit
+        ));
         $product->setWebsiteIds(array(Mage::app()->getStore(true)->getWebsite()->getId()));
         $product->setCreatedAt(strtotime('now'));
         $product->save(); 
 
-        array_push($this->productIds, $product->getId());
+        array_push($this->_productIds, $product->getId());
 
         return $product;
     }
 
     public function createFakeOrder($_customer=null, $_purchase_item_count=0) {
         $quote = Mage::getModel('sales/quote')->setStoreId(Mage::app()->getStore('default')->getId());
-        if (empty($this->productIds)) {
+        if (empty($this->_productIds)) {
             // Grab productIds from available items - of product type 'simple'
             $visibility = array(Mage_Catalog_Model_Product_Visibility::VISIBILITY_BOTH,
                                 Mage_Catalog_Model_Product_Visibility::VISIBILITY_IN_CATALOG
@@ -165,8 +184,8 @@ class MageFaker {
         }
 
         for ($k = 0; $k < $_purchase_item_count; $k++) {
-            $index = array_rand($this->productIds, 1);  // Randomly pick a productId
-            $product = Mage::getModel('catalog/product')->load($this->productIds[$index]); // Make sure it's a 'simple' item
+            $index = array_rand($this->_productIds, 1);  // Randomly pick a productId
+            $product = Mage::getModel('catalog/product')->load($this->_productIds[$index]); // Make sure it's a 'simple' item
             $qtyInfo = array('qty' => 1);
             $quote->addProduct($product, new Varien_Object($qtyInfo));
         }
@@ -226,7 +245,7 @@ class MageFaker {
         }
 
         $quote->getShippingAddress()->setCollectShippingRates(true);
-        $quote->getShippingAddress()->setShippingMethod('flatrate_flatrate'); //->setShippingMethod('tablerate_bestway')
+        $quote->getShippingAddress()->setShippingMethod('flatrate_flatrate');
         $quote->getShippingAddress()->setPaymentMethod('checkmo');
         $quote->getPayment()->importData(array('method' => 'checkmo'));
         $quote->collectTotals(); 
@@ -237,8 +256,6 @@ class MageFaker {
         $service->submitAll();
 
         return $service->getOrder();
-
-        return null;
     }
 }
 
